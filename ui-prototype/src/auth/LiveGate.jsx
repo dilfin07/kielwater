@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Center, Paper, Title, Text, PasswordInput, Button, Stack, Badge } from '@mantine/core'
+import { Center, Paper, Title, Text, PasswordInput, Button, Stack, Badge, Group } from '@mantine/core'
+import { BrandMark } from '../components/BrandMark'
 import { MODE } from '../api/client'
 import { authStatus, login, setToken, getToken } from '../api/liveClient'
 
@@ -21,7 +22,10 @@ function LoginCard({ onOk }) {
   return (
     <Center h="100vh">
       <Paper withBorder p="xl" w={360} radius="md">
-        <Title order={4} mb={4}>Kielwater</Title>
+        <Group gap={9} wrap="nowrap" mb={4}>
+          <BrandMark size={19} />
+          <Title order={4} style={{ letterSpacing: '-0.02em' }}>Kielwater</Title>
+        </Group>
         <Badge size="xs" variant="light" color="orange" mb="md">live · боевой Pi</Badge>
         <Stack gap="sm">
           <PasswordInput label="Пароль" value={pw} autoFocus

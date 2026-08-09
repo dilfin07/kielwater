@@ -1,6 +1,7 @@
 import { Box, Group, Stack, Title, Text, List, Table, Code, Anchor, Badge, Paper, ThemeIcon, Divider, ActionIcon, Tooltip, TableOfContents } from '@mantine/core'
 import { useMantineColorScheme } from '@mantine/core'
 import { Lightning, ArrowLeft, Sun, Moon } from '@phosphor-icons/react'
+import { BrandMark } from '../components/BrandMark'
 import { CARD, HAIRLINE, SUBTLE_BG } from '../constants'
 
 function Section({ id, title, children }) {
@@ -69,10 +70,8 @@ function TopBar() {
     <Box style={{ position: 'sticky', top: 0, zIndex: 10, borderBottom: `1px solid ${HAIRLINE}`, background: 'var(--mantine-color-body)' }}>
       <Group h={52} px="lg" justify="space-between" wrap="nowrap" maw={1180} mx="auto">
         <Group gap={10} wrap="nowrap">
-          <Box w={26} h={26} style={{ borderRadius: 7, background: 'var(--mantine-color-blue-6)', display: 'grid', placeItems: 'center' }}>
-            <Lightning size={16} weight="fill" color="white" />
-          </Box>
-          <Text fw={700} size="sm">Kielwater</Text>
+          <BrandMark size={19} />
+          <Text fw={700} size="sm" style={{ letterSpacing: '-0.02em' }}>Kielwater</Text>
           <Divider orientation="vertical" />
           <Text size="sm" c="dimmed">Документация</Text>
         </Group>

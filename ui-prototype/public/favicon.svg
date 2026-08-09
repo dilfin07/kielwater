@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Знак Kielwater, квадратная версия: стойка K, луч и косая — три блока с воздухом.
+       Цвет задан через media-запрос: на тёмной теме браузера знак светлый, на светлой — тёмный. -->
+  <style>
+    .m { fill: #0A0A0B }
+    @media (prefers-color-scheme: dark) { .m { fill: #F2F3F5 } }
+  </style>
+  <g class="m">
+    <rect x="6" y="12" width="12" height="40"/>
+    <path d="M22 28 L28.7 12 L40.7 12 L34 28 Z"/>
+    <path d="M26 52 L42.8 12 L54.8 12 L38 52 Z"/>
+  </g>
+</svg>
