@@ -92,11 +92,15 @@ cp config/config.example.json config/config.json
 
 # 5. (опц.) собрать панель
 cd ../ui-prototype && npm install && \
-  npx vite build --base=/v2/ --outDir ../hl-copier/web/v2 --emptyOutDir && cd ../hl-copier
+  VITE_API=live npx vite build --base=/v2/ --outDir ../hl-copier/web/v2 --emptyOutDir && cd ../hl-copier
 
 # 6. запуск
 python3 tools/serve.py --port 8787 --host 127.0.0.1
 ```
+
+> ⚠️ `VITE_API=live` обязателен: без него панель собирается в **демо-режиме**
+> и рисует выдуманные счёт, позиции и PnL вместо данных с бэкенда.
+
 
 Открой **http://localhost:8787/v2**, войди по `UI_PASSWORD`. Начни в режиме **DRY**, посмотри
 план, который строит бот, и переключись в **LIVE**, когда будешь готов.

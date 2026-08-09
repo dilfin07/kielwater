@@ -94,11 +94,15 @@ cp config/config.example.json config/config.json
 
 # 5. (optional) build the dashboard
 cd ../ui-prototype && npm install && \
-  npx vite build --base=/v2/ --outDir ../hl-copier/web/v2 --emptyOutDir && cd ../hl-copier
+  VITE_API=live npx vite build --base=/v2/ --outDir ../hl-copier/web/v2 --emptyOutDir && cd ../hl-copier
 
 # 6. run
 python3 tools/serve.py --port 8787 --host 127.0.0.1
 ```
+
+> ⚠️ `VITE_API=live` is required: without it the dashboard builds in **mock mode**
+> and shows made-up account, positions and PnL instead of real backend data.
+
 
 Open **http://localhost:8787/v2** and log in with `UI_PASSWORD`. Start in **DRY** mode,
 watch the plan it produces, then switch to **LIVE** when you're comfortable.
