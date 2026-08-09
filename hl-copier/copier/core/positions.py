@@ -56,3 +56,97 @@ def price_move_pct(side_sign, entry, mark):
     if side_sign > 0:                       # long
         return (mark / entry - 1) * 100
     return (1 - mark / entry) * 100         # short
+
+
+def reconstruct_positions(trades, symbol, start_pos=0.0, bot_ids=frozenset(), truncated=False):
+    """Восстановить ИСТОРИЮ позиций по ленте сделок (чистая функция, без сети).
+
+    Лента идёт по возрастанию времени. Позиция набирается неттингом; запись закрывается,
+    когда нетто приходит в ноль.
+
+    РАЗВОРОТ. Встречная сделка может быть больше текущей позиции: сидели в шорте 0.5,
+    пришёл BUY 1.2 — позиция мгновенно становится лонгом 0.7, проскакивая ноль. Раньше
+    условие «нетто == 0» в такой момент не срабатывало НИКОГДА, поэтому запись не
+    закрывалась: сторона и время открытия оставались от самой первой сделки, и журнал
+    показывал одну вечную позицию вместо нескольких. Теперь такая сделка режется на две
+    части: закрывающую (в неё уходит реализованный PnL) и открывающую новую позицию.
+
+    start_pos — позиция на начало ленты. Биржа отдаёт сделки ограниченным окном, поэтому
+    нулём его считать нельзя: окно часто начинается посреди уже открытой позиции.
+    truncated=True помечает первую запись как начатую до начала ленты (цена входа и время
+    открытия по ней неполные).
+    """
+    out = []
+    pos = float(start_pos)
+    # объём, «унаследованный» от куска ленты до её начала: цена входа по нему неизвестна,
+    # но в объём закрытия он входить обязан, иначе qty закрытой записи выйдет заниженным
+    en_q = abs(pos)
+    en_not = rpnl = comm = 0.0
+    max_q = abs(pos)
+    open_t = None
+    side = "LONG" if pos > 0 else ("SHORT" if pos < 0 else None)
+    bot_open = False
+    first_is_truncated = truncated and abs(pos) > 1e-12
+    last_t = None
+
+    def _emit(status, price, close_t):
+        cut = first_is_truncated and not out          # обрезана только самая первая запись
+        out.append({
+            "symbol": symbol, "side": side, "status": status,
+            # у обрезанной записи часть объёма набрана до начала ленты — средняя входа неизвестна
+            "entry": None if cut else (round(en_not / en_q, 5) if en_q else 0),
+            "exit": round(price, 5) if price is not None else None,
+            "qty": round(en_q if status == "closed" else abs(pos), 6),
+            "max_qty": round(max_q, 6),
+            "realizedPnl": round(rpnl, 2), "commission": round(comm, 4),
+            "open_time": open_t, "close_time": close_t,
+            "duration_min": round((close_t - open_t) / 60000) if (open_t and close_t) else None,
+            "bot": bot_open,
+            "truncated": cut,
+        })
+
+    for t in trades:
+        q = float(t["qty"]); price = float(t["price"])
+        signed = q if t["side"] == "BUY" else -q
+        rp = float(t.get("realizedPnl", 0) or 0); cm = float(t.get("commission", 0) or 0)
+        last_t = t["time"]
+
+        if abs(pos) < 1e-12:                                    # открываем с нуля
+            open_t = t["time"]; side = "LONG" if signed > 0 else "SHORT"
+            en_q, en_not, rpnl, comm, pos = q, q * price, rp, cm, signed
+            max_q = abs(pos)
+            bot_open = str(t.get("orderId")) in bot_ids
+            continue
+
+        if (pos > 0) == (signed > 0):                           # добор в ту же сторону
+            en_q += q; en_not += q * price; rpnl += rp; comm += cm
+            pos += signed
+            max_q = max(max_q, abs(pos))
+            continue
+
+        # встречная сделка: часть (или вся) закрывает позицию
+        closing = min(q, abs(pos))
+        rest = q - closing
+        rpnl += rp                                              # PnL реализует именно закрытие
+        comm += cm * (closing / q) if q else 0
+        pos += closing if signed > 0 else -closing
+
+        if abs(pos) > 1e-9:                                     # частичное сокращение — позиция жива
+            continue
+
+        _emit("closed", price, t["time"])                       # закрылась (в ноль или через разворот)
+        en_q = en_not = rpnl = comm = max_q = 0.0
+        open_t = None; side = None; bot_open = False; pos = 0.0
+
+        if rest > 1e-12:                                        # остаток открывает встречную позицию
+            open_t = t["time"]; side = "LONG" if signed > 0 else "SHORT"
+            pos = rest if signed > 0 else -rest
+            en_q, en_not = rest, rest * price
+            rpnl, comm = 0.0, cm * (rest / q) if q else 0.0
+            max_q = abs(pos)
+            bot_open = str(t.get("orderId")) in bot_ids
+
+    if abs(pos) > 1e-9 and abs(rpnl) > 1e-9:                    # ещё открыта, но PnL уже реализован
+        _emit("partial", None, None)
+        out[-1]["duration_min"] = round((last_t - open_t) / 60000) if (open_t and last_t) else None
+    return out

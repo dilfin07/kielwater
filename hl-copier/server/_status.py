@@ -6,7 +6,7 @@ read-эндпоинты для UI (ордера/исполнения/истор�
 """
 import time
 
-from copier.execution.binance import to_symbol
+from copier.execution.binance import to_symbol, positions_from_account
 
 
 class StatusMixin:
@@ -75,61 +75,58 @@ class StatusMixin:
             return {"fills": fills[:150]}
         return self._cached("fills", 25, build)
 
+    WEEK_MS = 7 * 24 * 3600 * 1000
+    POSHIST_MAX_WEEKS = 12            # предел похода вглубь: 12 запросов на символ в худшем случае
+
+    def _trades_back(self, symbol, pos_now):
+        """Лента сделок по символу вглубь — пока не найдём момент, когда позиции НЕ БЫЛО.
+
+        Binance отдаёт максимум неделю за запрос, поэтому шагаем окнами по неделе назад.
+        Текущая позиция известна с биржи, дельта каждого окна считается по сделкам — значит
+        позиция на начало окна выводится вычитанием. Как только она сошлась в ноль, начало
+        найдено и дальше история не нужна: обычно это один-два запроса.
+
+        Возвращает (сделки по возрастанию времени, позиция на начало ленты)."""
+        out, end_ms, pos_at_start = [], int(time.time() * 1000), float(pos_now)
+        for _ in range(self.POSHIST_MAX_WEEKS):
+            batch = sorted(self.bn.user_trades(symbol, limit=1000,
+                                               start_ms=end_ms - self.WEEK_MS, end_ms=end_ms),
+                           key=lambda t: t["time"])
+            out = batch + out
+            for t in batch:
+                q = float(t["qty"])
+                pos_at_start -= q if t["side"] == "BUY" else -q
+            if abs(pos_at_start) < 1e-9:
+                return out, 0.0                      # дошли до настоящего начала позиции
+            end_ms = (batch[0]["time"] - 1) if batch else (end_ms - self.WEEK_MS)
+        return out, pos_at_start                     # упёрлись в предел — начало осталось за лентой
+
     def get_position_history(self):
         if not self.have_keys:
             return {"positions": []}
 
         def build():
+            from copier.core.positions import reconstruct_positions
+            try:
+                legs = positions_from_account(self.bn.account())
+            except Exception:
+                legs = {}
             closed = []
             for s in self._traded_symbols():
+                pos_now = sum(v for (sym, _ps), v in legs.items() if sym == s)
                 try:
-                    trades = sorted(self.bn.user_trades(s, limit=500), key=lambda t: t["time"])
+                    trades, start_pos = self._trades_back(s, pos_now)
                 except Exception:
                     continue
-                pos = en_q = en_not = rpnl = comm = max_q = 0.0
-                open_t = side = last_t = None
-                bot_open = False                          # открыта ли позиция бот-ордером
-                for t in trades:
-                    q = float(t["qty"]); price = float(t["price"])
-                    signed = q if t["side"] == "BUY" else -q
-                    rp = float(t.get("realizedPnl", 0) or 0); cm = float(t.get("commission", 0) or 0)
-                    last_t = t["time"]
-                    if abs(pos) < 1e-12:
-                        open_t = t["time"]; side = "LONG" if signed > 0 else "SHORT"
-                        en_q, en_not, rpnl, comm, pos = q, q * price, rp, cm, signed
-                        max_q = abs(pos)
-                        bot_open = str(t.get("orderId")) in self._bot_orders
-                    else:
-                        rpnl += rp; comm += cm
-                        if (pos > 0) == (signed > 0):
-                            en_q += q; en_not += q * price
-                        pos += signed
-                        max_q = max(max_q, abs(pos))
-                        if abs(pos) < 1e-9:
-                            closed.append({"symbol": s, "side": side, "status": "closed",
-                                           "entry": round(en_not / en_q, 5) if en_q else 0,
-                                           "exit": round(price, 5), "qty": round(en_q, 6),
-                                           "max_qty": round(max_q, 6),
-                                           "realizedPnl": round(rpnl, 2), "commission": round(comm, 4),
-                                           "open_time": open_t, "close_time": t["time"],
-                                           "duration_min": round((t["time"] - open_t) / 60000),
-                                           "bot": bot_open})
-                            pos = en_q = en_not = rpnl = comm = max_q = 0.0; bot_open = False
-                # позиция ещё ОТКРЫТА, но по ней уже был реализованный PnL → частично закрыта
-                if abs(pos) > 1e-9 and abs(rpnl) > 1e-9:
-                    closed.append({"symbol": s, "side": side, "status": "partial",
-                                   "entry": round(en_not / en_q, 5) if en_q else 0,
-                                   "exit": None, "qty": round(abs(pos), 6), "max_qty": round(max_q, 6),
-                                   "realizedPnl": round(rpnl, 2), "commission": round(comm, 4),
-                                   "open_time": open_t, "close_time": None,
-                                   "duration_min": round((last_t - open_t) / 60000) if last_t else None,
-                                   "bot": bot_open})
+                closed += reconstruct_positions(trades, s, start_pos=start_pos,
+                                                bot_ids=self._bot_orders,
+                                                truncated=abs(start_pos) > 1e-9)
             closed.sort(key=lambda x: -(x.get("close_time") or x.get("open_time") or 0))
             from copier.core.analytics import trade_analytics
             # метрики — только по ПОЛНОСТЬЮ закрытым (partial ещё не финализирован)
             fully = [c for c in closed if c.get("status") != "partial"]
             return {"positions": closed[:100], "analytics": trade_analytics(fully)}
-        return self._cached("poshist", 30, build)
+        return self._cached("poshist", 120, build)   # ходов к бирже больше — держим кэш дольше
 
     def user_trades(self, symbol):
         if not self.have_keys:

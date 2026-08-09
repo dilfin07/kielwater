@@ -198,10 +198,18 @@ class BinanceFutures:
         return self._request("GET", "/fapi/v1/klines",
                              {"symbol": symbol, "interval": interval, "limit": limit})
 
-    def user_trades(self, symbol, limit=200):
-        """Наши сделки по символу (для маркеров на графике)."""
-        return self._request("GET", "/fapi/v1/userTrades",
-                             {"symbol": symbol, "limit": limit}, signed=True)
+    def user_trades(self, symbol, limit=200, start_ms=None, end_ms=None):
+        """Наши сделки по символу (маркеры на графике, реконструкция истории позиций).
+
+        БЕЗ диапазона Binance отдаёт только ПОСЛЕДНЮЮ НЕДЕЛЮ — этого не хватает, чтобы найти
+        начало давно открытой позиции. С диапазоном окно тоже не длиннее недели, поэтому
+        вглубь истории ходят шагами по неделе (см. _trades_back в server/_status.py)."""
+        p = {"symbol": symbol, "limit": limit}
+        if start_ms:
+            p["startTime"] = int(start_ms)
+        if end_ms:
+            p["endTime"] = int(end_ms)
+        return self._request("GET", "/fapi/v1/userTrades", p, signed=True)
 
     def income(self, start_ms, end_ms=None, income_type=None):
         """История доходов (REALIZED_PNL/FUNDING_FEE/COMMISSION/…) с пагинацией."""
