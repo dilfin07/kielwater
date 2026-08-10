@@ -23,7 +23,7 @@ export const LOCALES = {
     'ui.tz.hint': 'Применяется к времени в логах и журнале; внизу идут часы по выбранному поясу.',
     'view.logs.title': 'Логи', 'view.logs.refresh': 'Обновить', 'view.logs.clear': 'Очистить',
     // монитор
-    'mon.spot': 'Спот (кэш)', 'mon.base': 'Капитал (база)', 'mon.positions': 'Позиций',
+    'mon.spot': 'Спот (кэш)', 'mon.bank': 'Банк (всего)', 'mon.base': 'База пропорции', 'mon.positions': 'Позиций',
     'mon.copy': 'В копир', 'mon.uncopy': 'Убрать из копира',
     'mon.copyTitle': 'Сделать целью копирования?', 'mon.uncopyTitle': 'Убрать из копира?',
     'mon.copyBody': '— станет единственной целью активного счёта. Текущая цель сменится; копир зеркалит её движения (после старта/синка).',
@@ -134,7 +134,7 @@ export const LOCALES = {
     'ui.tz.hint': 'Applied to times in logs and journal; the clock below runs in the selected zone.',
     'view.logs.title': 'Logs', 'view.logs.refresh': 'Refresh', 'view.logs.clear': 'Clear',
     // monitor
-    'mon.spot': 'Spot (cash)', 'mon.base': 'Capital (basis)', 'mon.positions': 'Positions',
+    'mon.spot': 'Spot (cash)', 'mon.bank': 'Bank (total)', 'mon.base': 'Proportion basis', 'mon.positions': 'Positions',
     'mon.copy': 'Copy', 'mon.uncopy': 'Stop copying',
     'mon.copyTitle': 'Set as copy target?', 'mon.uncopyTitle': 'Stop copying?',
     'mon.copyBody': '— becomes the sole target of the active account. The current target is replaced; the copier mirrors its moves (after start/sync).',

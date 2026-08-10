@@ -66,6 +66,7 @@ function MonitorRow({ m, actions }) {
         </Box>
         <Metric label="Perp Total Value" value={m.perp} />
         <Metric label={t('mon.spot')} value={m.spot} />
+        <Metric label={t('mon.bank')} value={m.bank} />
         <Metric label={t('mon.base')} value={m.base} color="blue" />
         <Metric label="uPnL" value={m.upnl} color={m.upnl.startsWith('+') ? 'teal' : 'red'} />
         <Metric label="Free margin" value={m.free} />

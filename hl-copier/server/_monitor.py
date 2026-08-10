@@ -53,7 +53,11 @@ class MonitorMixin:
                 "position_value": round(notional, 2), "uPnl": round(upnl, 2),
                 "roe": round(f(p.get("returnOnEquity")) * 100, 1), "margin": round(f(p.get("marginUsed")), 2),
             })
-        view = {"equity": round(eq), "uPnl": round(tot, 2), "free_margin": round(withdrawable),
+        # free_margin — СВОБОДНАЯ маржа (эквити минус занятое), а не withdrawable: последний
+        # у кросс-позиций почти всегда 0 (деньги заперты залогом), и карточка показывала «$0»
+        # там, где у трейдера реально миллионы свободного плеча.
+        view = {"equity": round(eq), "uPnl": round(tot, 2),
+                "free_margin": round(eq - margin_used), "withdrawable": round(withdrawable),
                 "margin_ratio": round(margin_used / eq * 100, 2) if eq else 0, "positions": rich}
         return view, diff_snap
 
@@ -116,7 +120,13 @@ class MonitorMixin:
             self._mon_view[addr] = {
                 "address": addr, "name": m.get("name") or addr[:8],
                 "alerts": m.get("alerts", True), "copying": copying, **view,
-                "spot_usd": round(spot), "basis": round(max(view.get("equity") or 0, spot)),
+                "spot_usd": round(spot),
+                # basis — БАЗА ПРОПОРЦИИ (max), а не весь капитал: на HL кросс-марже спот-USDC
+                # и есть залог перпа, поэтому сумма считала бы одни деньги дважды. Проверено
+                # обратным счётом от цены ликвидации: max расходится с залогом биржи на ~2%,
+                # сумма — на +36%. bank отдаём отдельно, чтобы «сколько у него всего» было видно.
+                "basis": round(max(view.get("equity") or 0, spot)),
+                "bank": round((view.get("equity") or 0) + spot),
             }
             try:
                 self._diff_monitor_alerts(m, addr, view, snap)

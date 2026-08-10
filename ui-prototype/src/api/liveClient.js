@@ -38,7 +38,8 @@ function adaptMonitors(data) {
     addr: m.address,
     perp: usd(m.equity),
     spot: usd(m.spot_usd),
-    base: usd(m.basis),
+    bank: usd(m.bank),          // перп + спот: сколько у трейдера всего денег
+    base: usd(m.basis),         // база пропорции = max(перп, спот) — по ней считается наш размер
     upnl: signed(m.uPnl),
     free: usd(m.free_margin),
     mur: Math.round((m.margin_ratio ?? 0) * 100) / 100,
