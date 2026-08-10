@@ -57,13 +57,17 @@ function MonitorRow({ m, actions }) {
   const doCopy = () => { m.copying ? actions.clearCopy() : actions.setCopy(m.addr); setConfirm(false) }
   return (
     <Paper withBorder p="sm" radius="md" style={CARD}>
-      <Group gap="md" wrap="nowrap" align="center" style={{ minWidth: 1280 }}>
+      {/* имя слева и кнопки справа закреплены, прокручивается ТОЛЬКО полоса метрик:
+          иначе на узком окне действия уезжают за край и до них не дотянуться */}
+      <Group gap="md" wrap="nowrap" align="center">
         <Box w={180} style={{ flexShrink: 0, minWidth: 0 }}>
           <Group gap={6} wrap="nowrap">
             <Text fw={600} size="sm" truncate>{m.name}</Text>
           </Group>
           <Text fz={11} c="dimmed" ff="monospace" truncate>{m.addr.slice(0, 10)}…</Text>
         </Box>
+        <Group gap="md" wrap="nowrap" align="center"
+               style={{ flex: 1, minWidth: 0, overflowX: 'auto', scrollbarWidth: 'thin' }}>
         <Metric label="Perp Total Value" value={m.perp} />
         <Metric label={t('mon.spot')} value={m.spot} />
         <Metric label={t('mon.bank')} value={m.bank} />
@@ -72,7 +76,8 @@ function MonitorRow({ m, actions }) {
         <Metric label="Free margin" value={m.free} />
         <MarginBar pct={m.mur} />
         <Metric label={t('mon.positions')} value={m.pos} w={62} />
-        <Group gap={4} wrap="nowrap" ml="auto" style={{ flexShrink: 0 }}>
+        </Group>
+        <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
           <Button size="compact-xs" variant={m.copying ? 'light' : 'filled'} color={m.copying ? 'orange' : 'blue'}
             leftSection={m.copying ? null : <ArrowRight size={13} />} onClick={() => setConfirm(true)}>
             {m.copying ? t('mon.uncopy') : t('mon.copy')}
@@ -117,7 +122,9 @@ export default function MonitorView() {
     setAddr(''); setName('')
   }
   return (
-    <Box p="lg" maw={1500} mx="auto" style={{ overflowX: 'auto' }}>
+    // AppShell.Main задан фиксированной высотой и сам не скроллится (как в Настройках и
+    // Логах) — без своего overflowY последние карточки уходят под подвал
+    <Box p="lg" pb={48} maw={1500} mx="auto" style={{ height: '100%', overflowY: 'auto' }}>
       <Paper withBorder p="sm" radius="md" style={CARD}>
         <Group gap="sm" wrap="nowrap" align="flex-end">
           <TextInput size="xs" style={{ flex: 1 }} label={t('mon.addr')} placeholder="0x…" value={addr} onChange={(e) => setAddr(e.currentTarget.value)} />
