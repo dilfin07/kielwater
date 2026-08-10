@@ -123,8 +123,11 @@ export default function MonitorView() {
   }
   return (
     // AppShell.Main задан фиксированной высотой и сам не скроллится (как в Настройках и
-    // Логах) — без своего overflowY последние карточки уходят под подвал
-    <Box p="lg" pb={48} maw={1500} mx="auto" style={{ height: '100%', overflowY: 'auto' }}>
+    // Логах) — без своего overflowY последние карточки уходят под подвал.
+    // Прокрутка висит на ВСЮ ширину, а контент центрируется внутри: иначе полоса
+    // скролла оказывается на краю блока в 1500px, то есть посреди экрана.
+    <Box style={{ height: '100%', overflowY: 'auto' }}>
+    <Box p="lg" pb={48} maw={1500} mx="auto">
       <Paper withBorder p="sm" radius="md" style={CARD}>
         <Group gap="sm" wrap="nowrap" align="flex-end">
           <TextInput size="xs" style={{ flex: 1 }} label={t('mon.addr')} placeholder="0x…" value={addr} onChange={(e) => setAddr(e.currentTarget.value)} />
@@ -138,6 +141,7 @@ export default function MonitorView() {
           : monitors.length ? monitors.map((m) => <MonitorRow key={m.id} m={m} actions={actions} />)
             : <Text size="sm" c="dimmed" ta="center" py="xl">{t('mon.empty')}</Text>}
       </Stack>
+    </Box>
     </Box>
   )
 }
