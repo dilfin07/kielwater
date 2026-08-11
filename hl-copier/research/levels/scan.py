@@ -170,6 +170,32 @@ def scan(pool, coin, low, high, side, start_ms, end_ms, min_usd, verbose, worker
     return hits
 
 
+def load_pool(path):
+    """Пул адресов из любого нашего формата: сырой лидерборд HL (00_leaderboard.json),
+    список активных (01_active.json), pool.json, csv-вотчлист или просто список адресов."""
+    if path.endswith(".csv"):
+        import csv
+        with open(path) as fh:
+            rows = list(csv.DictReader(fh))
+        key = "a" if rows and "a" in rows[0] else "address"
+        return {r[key]: r for r in rows if r.get(key, "").startswith("0x")}
+
+    raw = json.load(open(path))
+    if isinstance(raw, dict) and "leaderboardRows" in raw:      # сырой лидерборд
+        raw = raw["leaderboardRows"]
+    if isinstance(raw, dict):                                   # {addr: meta}
+        return raw
+    out = {}
+    for x in raw:                                               # список строк или словарей
+        if isinstance(x, str):
+            out[x] = {}
+            continue
+        addr = x.get("address") or x.get("ethAddress") or x.get("user")
+        if addr:
+            out[addr] = x
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pool", required=True, help="json: {addr: {...}} или список адресов")
@@ -185,8 +211,7 @@ def main():
     ap.add_argument("--out", default="", help="куда сохранить json с уловом")
     a = ap.parse_args()
 
-    raw = json.load(open(a.pool))
-    pool = raw if isinstance(raw, dict) else {x if isinstance(x, str) else x["address"]: x for x in raw}
+    pool = load_pool(a.pool)
     if a.limit:
         pool = dict(list(pool.items())[:a.limit])
 
