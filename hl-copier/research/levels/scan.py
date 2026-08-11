@@ -75,17 +75,50 @@ ENTER = {
 }
 
 
-def scan(pool, coin, low, high, side, start_ms, end_ms, min_usd, verbose):
+def _hms(sec):
+    sec = int(max(sec, 0))
+    return "%d:%02d:%02d" % (sec // 3600, sec % 3600 // 60, sec % 60) if sec >= 3600 \
+        else "%d:%02d" % (sec // 60, sec % 60)
+
+
+def _bar(done, total, found, t0, width=30):
+    """Полоса прогресса в одну строку: перерисовывается на месте через \\r."""
+    pct = done / total if total else 1.0
+    fill = int(pct * width)
+    eta = (time.time() - t0) / done * (total - done) if done else 0
+    return "\r\033[K  [%s%s] %3.0f%%  %d/%d  найдено %d  осталось ~%s" % (
+        "█" * fill, "·" * (width - fill), pct * 100, done, total, found, _hms(eta))
+
+
+def scan(pool, coin, low, high, side, start_ms, end_ms, min_usd, verbose, workers=8):
+    """Перебор пула. Узкое место — не лимит биржи, а задержка сети: запросы идут по одному
+    и адрес занимает ~3.5с. Потоки перекрывают ожидания, пейсер при этом общий, так что
+    суммарный темп остаётся в рамках лимита HL."""
     enter = ENTER[side]
     hits = {}
-    for i, (addr, meta) in enumerate(pool.items(), 1):
-        if verbose and i % 25 == 0:
-            print("  …просмотрено %d / %d, найдено %d" % (i, len(pool), len(hits)), file=sys.stderr)
+    items = list(pool.items())
+    total, t0 = len(items), time.time()
+    tty = sys.stderr.isatty()
+    done = [0]
+    out_lock = threading.Lock()
+
+    def draw():
+        if not verbose:
+            return
+        if tty:
+            sys.stderr.write(_bar(done[0], total, len(hits), t0)); sys.stderr.flush()
+        elif done[0] % 25 == 0:
+            print("  …просмотрено %d / %d, найдено %d" % (done[0], total, len(hits)), file=sys.stderr)
+
+    def work(item):
+        addr, meta = item
         try:
             fills = fills_window(addr, start_ms, end_ms)
         except Exception as e:
-            print("  ! %s: %s" % (addr[:10], e), file=sys.stderr)
-            continue
+            with out_lock:
+                print("\r\033[K  ! %s: %s" % (addr[:10], e), file=sys.stderr)
+                done[0] += 1; draw()
+            return
         acc = None
         for f in fills:
             if f.get("coin") != coin or not enter(f.get("dir", "")):
@@ -104,8 +137,36 @@ def scan(pool, coin, low, high, side, start_ms, end_ms, min_usd, verbose):
             acc["days"].add(time.strftime("%m-%d", time.gmtime(f["time"] / 1000)))
             acc["first"] = min(acc["first"], f["time"])
             acc["last"] = max(acc["last"], f["time"])
-        if acc and acc["usd"] >= min_usd:
-            hits[addr] = acc
+        with out_lock:
+            if acc and acc["usd"] >= min_usd:
+                hits[addr] = acc
+                # находку показываем сразу, поверх полосы — интереснее смотреть вживую
+                print("\r\033[K  ✓ %s  %-16s $%s · %d сделок · %d дней · средняя %.1f" % (
+                    addr[:12] + "…", (acc["label"] or "")[:16], f"{acc['usd']:,.0f}",
+                    acc["n"], len(acc["days"]), sum(acc["pxs"]) / len(acc["pxs"])), file=sys.stderr)
+            done[0] += 1
+            draw()
+
+    threads = []
+    queue = list(items)
+    qlock = threading.Lock()
+
+    def loop():
+        while True:
+            with qlock:
+                if not queue:
+                    return
+                item = queue.pop()
+            work(item)
+
+    for _ in range(max(1, workers)):
+        th = threading.Thread(target=loop, daemon=True)
+        th.start(); threads.append(th)
+    for th in threads:
+        th.join()
+
+    if verbose and tty:
+        sys.stderr.write(_bar(total, total, len(hits), t0) + "\n"); sys.stderr.flush()
     return hits
 
 
@@ -119,6 +180,7 @@ def main():
     ap.add_argument("--days", type=int, default=21, help="глубина истории")
     ap.add_argument("--min-usd", type=float, default=50_000, help="порог объёма входа в зоне")
     ap.add_argument("--limit", type=int, default=0, help="взять только первые N адресов (проба)")
+    ap.add_argument("--workers", type=int, default=8, help="потоков; пейсер общий, лимит HL не превышаем")
     ap.add_argument("--top", type=int, default=25)
     ap.add_argument("--out", default="", help="куда сохранить json с уловом")
     a = ap.parse_args()
@@ -134,7 +196,7 @@ def main():
           % (a.coin, a.low, a.high, a.side, len(pool), a.days), file=sys.stderr)
 
     t0 = time.time()
-    hits = scan(pool, a.coin, a.low, a.high, a.side, start_ms, end_ms, a.min_usd, True)
+    hits = scan(pool, a.coin, a.low, a.high, a.side, start_ms, end_ms, a.min_usd, True, a.workers)
     print("готово за %.0f с" % (time.time() - t0), file=sys.stderr)
 
     rows = sorted(hits.values(), key=lambda r: -r["usd"])
